@@ -248,6 +248,21 @@ class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self._forward("GET")
 
+    def do_OPTIONS(self):
+        # 浏览器 CORS 预检：本地直接应答，不转发上游
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers",
+                         self.headers.get("Access-Control-Request-Headers") or "*")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def end_headers(self):
+        # 所有响应（含上游透传、错误响应）统一带上 CORS 允许头
+        self.send_header("Access-Control-Allow-Origin", "*")
+        super().end_headers()
+
     def _forward(self, method):
         # ---- 读入请求体并做模型别名重写 ----
         try:
@@ -321,7 +336,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self.send_response(status)
             for k, v in resp.getheaders():
                 lk = k.lower()
-                if lk in HOP_BY_HOP or lk in ("content-length", "transfer-encoding"):
+                if lk in HOP_BY_HOP or lk in ("content-length", "transfer-encoding") \
+                        or lk.startswith("access-control-"):
                     continue
                 self.send_header(k, v)
 
